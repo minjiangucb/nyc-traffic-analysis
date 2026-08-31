@@ -3,23 +3,39 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime, timedelta
-import os
+import requests
+from io import StringIO
 
-# ---------- Load data directly from NYC Open Data ----------
+st.set_page_config(page_title="NYC Crash Dashboard", layout="wide")
+st.title("🚗 NYC Motor Vehicle Collisions Dashboard")
+
+# ---------- Load data from NYC Open Data ----------
 @st.cache_data
 def load_data():
     url = "https://data.cityofnewyork.us/api/views/h9gi-nx95/rows.csv?accessType=DOWNLOAD"
-    df = pd.read_csv(url, low_memory=False)
-    df['CRASH DATE'] = pd.to_datetime(df['CRASH DATE'])
-    df['CRASH TIME'] = pd.to_datetime(df['CRASH TIME'], format='%H:%M', errors='coerce')
-    df['Hour'] = df['CRASH TIME'].dt.hour
-    return df
+    
+    with st.spinner("🔄 Loading 2M+ crash records from NYC Open Data..."):
+        try:
+            response = requests.get(url, timeout=120)
+            response.raise_for_status()
+            
+            # Use StringIO to handle large data efficiently
+            df = pd.read_csv(StringIO(response.text), low_memory=False)
+            
+            df['CRASH DATE'] = pd.to_datetime(df['CRASH DATE'])
+            df['CRASH TIME'] = pd.to_datetime(df['CRASH TIME'], format='%H:%M', errors='coerce')
+            df['Hour'] = df['CRASH TIME'].dt.hour
+            
+            return df
+        except Exception as e:
+            st.error(f"⚠️ Failed to load data: {str(e)}")
+            st.info("💡 Please refresh the page. If the problem persists, the NYC Open Data server may be busy.")
+            return None
 
 data = load_data()
 
-# ---------- Page config ----------
-st.set_page_config(page_title="NYC Crash Dashboard", layout="wide")
-st.title("🚗 NYC Motor Vehicle Collisions Dashboard")
+if data is None:
+    st.stop()
 
 # ---------- Sidebar ----------
 st.sidebar.header("Navigation")
@@ -47,7 +63,7 @@ if page == "📊 Analysis":
 # ---------- Page 2: Prediction ----------
 else:
     st.subheader("🔮 Tomorrow's Crash Prediction")
-    st.info("⚠️ Prediction is available in the local version. Train the model using `2_Prediction_Modeling.ipynb` and upload `crash_predictor.pkl` to enable this feature.")
     tomorrow = datetime.now() + timedelta(days=1)
-    st.metric("📅 Date", tomorrow.strftime('%Y-%m-%d'))
+    st.info(f"📅 Predicting for: **{tomorrow.strftime('%Y-%m-%d')}**")
+    st.warning("⚠️ Prediction feature requires model training. Run `2_Prediction_Modeling.ipynb` locally and upload `crash_predictor.pkl` to enable.")
     st.caption("Model: RandomForest | Features: Year, Month, Day, DayOfWeek")
